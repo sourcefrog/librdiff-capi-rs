@@ -18,26 +18,38 @@
 extern crate libc;
 extern crate librdiff;
 
-/// Nul-terminated version number for ease of C binding.
-pub static VERSION: &'static str = "3.0.0\0";
 
+// See http://stackoverflow.com/a/33883281/243712: this marks the pointer Sync allowing it to
+// be in a global.
+#[repr(C)]
+pub struct StaticCString(*const u8);
+unsafe impl Sync for StaticCString {}
+
+#[allow(non_upper_case_globals)]
 #[no_mangle]
-pub extern fn rs_version() -> *const libc::c_char {
-    // Version from environment has nul termination (I think we can count on this?)
-    return VERSION.as_ptr() as *const libc::c_char;
-}
+pub static rs_librsync_version: StaticCString =
+    StaticCString(b"3.0.0\0" as *const u8);
+
+
+// #[no_mangle]
+// pub extern fn rs_version() -> *const libc::c_char {
+//     // Version from environment has nul termination (I think we can count on this?)
+//     return rs_librsync_version as *const libc::c_char;
+// }
 
 
 #[cfg(test)]
 #[test]
 pub fn test_versions_consistent() {
+    use std::ffi::CStr;
+    use std::os::raw::c_char;
+
+    let v = CStr::from_ptr(&rs_librsync_version as *const u8);
+
     // I can't work out how to automatically store a static CString, but
     // let's at least check they're in sync, and that ours has a nul.
-    assert_eq!(VERSION.as_bytes()[VERSION.len()-1], 0);
     let their_v = librdiff::VERSION;
-    let l = their_v.len();
-    assert_eq!(VERSION.len(), l + 1);
-    assert_eq!(VERSION[0..l], their_v.to_string());
+    assert_eq!(their_v, v.to_str().unwrap());
 
     // It should also be consistent with the Cargo version for librdiff-capi-rs.
     assert_eq!(their_v, env!("CARGO_PKG_VERSION"));
